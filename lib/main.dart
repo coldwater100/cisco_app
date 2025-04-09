@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+void main() {
   runApp(const MyApp());
 }
 
@@ -17,85 +11,113 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Firestore Test App',
+      title: 'QR 스캐너 데모',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Firestore Counter Demo'),
+      home: const QRScannerHomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+class QRScannerHomePage extends StatefulWidget {
+  const QRScannerHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<QRScannerHomePage> createState() => _QRScannerHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+class _QRScannerHomePageState extends State<QRScannerHomePage> {
+  String? scannedValue;
 
-  void _incrementCounter() async {
-    setState(() {
-      _counter++;
-    });
-
-    // Firestore에 새로운 카운트 값 추가
-    await _firestore.collection('counters').add({
-      'count': _counter,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+  void _startScan() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => QRScannerPage(
+          onScanned: (value) {
+            setState(() {
+              scannedValue = value;
+            });
+          },
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        title: const Text('QR 코드 스캐너'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('counters')
-            .orderBy('timestamp', descending: true)
-            .limit(1)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final doc = snapshot.data!.docs.first;
-          final count = doc['count'];
-
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                const Text('You have pushed the button this many times:'),
-                Text(
-                  '$_counter',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 20),
-                const Text('Latest stored Firestore value:'),
-                Text(
-                  '$count',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              ],
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: _startScan,
+              child: const Text('📷 QR 코드 찍기'),
             ),
-          );
-        },
+            const SizedBox(height: 20),
+            if (scannedValue != null) ...[
+              const Text(
+                '스캔된 값:',
+                style: TextStyle(fontSize: 18),
+              ),
+              Text(
+                scannedValue!,
+                style: const TextStyle(
+                  fontSize: 22,
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+class QRScannerPage extends StatefulWidget {
+  final void Function(String value) onScanned;
+  const QRScannerPage({super.key, required this.onScanned});
+
+  @override
+  State<QRScannerPage> createState() => _QRScannerPageState();
+}
+
+class _QRScannerPageState extends State<QRScannerPage> {
+  final MobileScannerController controller = MobileScannerController();
+
+  @override
+  void dispose() {
+    controller.dispose(); // ✅ 카메라 종료
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('QR 스캔 중...')),
+      body: MobileScanner(
+        controller: controller, // ✅ 컨트롤러 연결
+        onDetect: (capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+
+          if (barcodes.isNotEmpty) {
+            final String? code = barcodes.first.rawValue;
+            if (code != null) {
+              widget.onScanned(code);
+
+              /// ✅ 카메라 멈추고 pop
+              controller.stop();
+              Navigator.pop(context);
+            }
+          }
+        },
       ),
     );
   }
