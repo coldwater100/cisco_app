@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "69122893978",
+    "project_id": "siscodb-23511",
+    "storage_bucket": "siscodb-23511.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:69122893978:android:0237c857274263ab329723",
+        "android_client_info": {
+          "package_name": "com.example.cisco_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDi1UOtkkdx0vysEqroBOlROHehVSyV3bA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
