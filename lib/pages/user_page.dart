@@ -2,6 +2,8 @@ import 'dart:async'; // ✅ Timer 사용 위해 필요
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../data/api_location.dart';
+import '../data/ble_location.dart';
 
 class UserPage extends StatefulWidget {
   final String scannedText;
@@ -15,8 +17,8 @@ class UserPage extends StatefulWidget {
 class _UserPageState extends State<UserPage> {
   String? otpValue;
   String? macAddress;
-  List<Map<String, dynamic>> apLocations = [];
-  List<Map<String, dynamic>> bleLocations = [];
+  List<ApLocation> apLocations = [];
+  List<BleLocation> bleLocations = [];
   Timer? _timer; // ✅ 타이머 변수
 
   @override
@@ -75,12 +77,7 @@ class _UserPageState extends State<UserPage> {
       await FirebaseFirestore.instance.collection('apLocations').get();
 
       final loadedLocations = querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'mac': data['mac'],
-          'x': (data['x'] as num).toDouble(),
-          'y': (data['y'] as num).toDouble(),
-        };
+        return ApLocation.fromMap(doc.data());
       }).toList();
 
       if (kDebugMode) {
@@ -103,16 +100,7 @@ class _UserPageState extends State<UserPage> {
       await FirebaseFirestore.instance.collection('bleLocations').get();
 
       final loadedLocations = querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'lat': (data['lat'] as num).toDouble(),
-          'lng': (data['lng'] as num).toDouble(),
-          'x': (data['x'] as num).toDouble(),
-          'y': (data['y'] as num).toDouble(),
-          'nearestApMac': data['nearestApMac'] as String,
-          'mac' : data['mac'] as String,
-          'nearestApRssi': data['nearestApRssi'] as int,
-        };
+        return BleLocation.fromMap(doc.data());
       }).toList();
 
       if (kDebugMode) {
@@ -132,11 +120,12 @@ class _UserPageState extends State<UserPage> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    const double iconSize = 30.0;
+    const double ap_iconSize = 30.0;
+    const double ble_iconSize = 30.0;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('👤 사용자 페이지'),
+        title: const Text('👤 사용자 위치 확인 '),
       ),
       body: Column(
         children: [
@@ -163,25 +152,23 @@ class _UserPageState extends State<UserPage> {
                 // 🛰️ AP 아이콘 표시
                 for (var ap in apLocations)
                   Positioned(
-                    left: (ap['x'] as double) / 100 * screenWidth -
-                        iconSize / 2,
-                    top: (ap['y'] as double) / 100 * screenWidth -
-                        iconSize / 2,
+                    left: ap.x / 100 * screenWidth - ap_iconSize / 2,
+                    top: ap.y / 100 * screenWidth - ap_iconSize / 2,
                     child: const Icon(
                       Icons.router,
                       color: Colors.blueAccent,
-                      size: iconSize,
+                      size: ap_iconSize,
                     ),
                   ),
                 // 📡 BLE 아이콘 표시
                 for (var ble in bleLocations)
                   Positioned(
-                    left: (ble['x'] as double) / 100 * screenWidth - iconSize / 2,
-                    top: (ble['y'] as double) / 100 * screenWidth - iconSize / 2,
+                    left: ble.x / 100 * screenWidth - ble_iconSize / 2,
+                    top: ble.y / 100 * screenWidth - ble_iconSize / 2,
                     child: const Icon(
-                      Icons.bluetooth,
-                      color: Colors.greenAccent,
-                      size: iconSize,
+                      Icons.person_2_rounded,
+                      color: Colors.redAccent,
+                      size: ble_iconSize,
                     ),
                   ),
               ],
@@ -206,5 +193,6 @@ class _UserPageState extends State<UserPage> {
     );
   }
 }
+
 
 
