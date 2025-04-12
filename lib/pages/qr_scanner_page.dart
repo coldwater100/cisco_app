@@ -1,70 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../services/otp_lookup_service.dart';
-
-class QRScannerHomePage extends StatefulWidget {
-  const QRScannerHomePage({super.key});
-
-  @override
-  State<QRScannerHomePage> createState() => _QRScannerHomePageState();
-}
-
-class _QRScannerHomePageState extends State<QRScannerHomePage> {
-  String? scannedValue;
-  String? mac;
-  List<dynamic>? rssiList;
-
-  Future<void> _lookupOtp(String otp) async {
-    setState(() {
-      scannedValue = otp;
-      mac = null;
-      rssiList = null;
-    });
-
-    final result = await OtpLookupService.fetchLocationByOtp(otp);
-    setState(() {
-      mac = result?['mac'];
-      rssiList = result?['apRssiPairs'];
-    });
-  }
-
-  void _startScan() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => QRScannerPage(
-          onScanned: _lookupOtp,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('📷 QR + OTP 위치 조회')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: _startScan,
-              child: const Text('QR 코드 스캔'),
-            ),
-            const SizedBox(height: 20),
-            if (scannedValue != null) Text('OTP: $scannedValue'),
-            if (mac != null) Text('✅ MAC: $mac'),
-            if (rssiList != null) ...rssiList!.map((e) => Text('📡 ${e['apMac']}: ${e['rssi']}')).toList(),
-            if (mac == null && scannedValue != null) const Text('📬 위치 정보 없음')
-          ],
-        ),
-      ),
-    );
-  }
-}
+import 'user_page.dart';
 
 class QRScannerPage extends StatefulWidget {
-  final void Function(String value) onScanned;
-  const QRScannerPage({super.key, required this.onScanned});
+  const QRScannerPage({super.key});
 
   @override
   State<QRScannerPage> createState() => _QRScannerPageState();
@@ -72,31 +13,55 @@ class QRScannerPage extends StatefulWidget {
 
 class _QRScannerPageState extends State<QRScannerPage> {
   final MobileScannerController controller = MobileScannerController();
+  bool isScanned = false;
+  Timer? timeoutTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    timeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted || isScanned) return;
+      Fluttertoast.showToast(msg: '⏰ QR 스캔 실패: 시간이 초과되었습니다');
+      Navigator.pop(context);
+    });
+  }
 
   @override
   void dispose() {
+    timeoutTimer?.cancel();
     controller.dispose();
     super.dispose();
+  }
+
+  void _onQRCodeScanned(String qrText) {
+    if (isScanned) return;
+    isScanned = true;
+
+    timeoutTimer?.cancel();
+    controller.stop();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => UserPage(scannedText: qrText),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('🔍 스캔 중...')),
+      appBar: AppBar(title: const Text('📷 QR 코드 스캔')),
       body: MobileScanner(
         controller: controller,
         onDetect: (capture) {
-          final barcodes = capture.barcodes;
-          if (barcodes.isNotEmpty) {
-            final code = barcodes.first.rawValue;
-            if (code != null) {
-              widget.onScanned(code);
-              controller.stop();
-              Navigator.pop(context);
-            }
+          final code = capture.barcodes.firstOrNull?.rawValue;
+          if (code != null) {
+            _onQRCodeScanned(code);
           }
         },
       ),
     );
   }
 }
+
