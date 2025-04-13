@@ -20,7 +20,7 @@ class _UserPageState extends State<UserPage> {
   List<ApLocation> apLocations = [];  // ap 들의 data
   BleLocation? bleLocation ; // 등록된 ble 의 data
   Timer? _timer; //
-  final timerInterval = 5; // ble data 갱신 주기
+  final timerInterval = 2; // ble data 갱신 주기
   final Color apColor = Colors.redAccent;
   final Color apColorRemote = Colors.grey;
   final Color bleColor = Colors.blueAccent;
@@ -50,7 +50,8 @@ class _UserPageState extends State<UserPage> {
   }
 
   // rssi값에 따라 icon의 opacity를 결정
-  double getOpacityFromRssi(int rssi) {
+  double getOpacityFromRssi(int? rssi) {
+    if( rssi == null) return 0.5;
     final clamped = rssi.clamp(-100, -50);
     return (clamped + 100) / 100 * 0.5 + 0.5;
   }
@@ -117,8 +118,10 @@ class _UserPageState extends State<UserPage> {
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
-          .collection('bleLocations')
-          .where('mac', isEqualTo: macAddress)
+          .collection('scanning_data')
+          .where('clientMac', isEqualTo: macAddress)
+          .orderBy('timestamp', descending: true) // 최신 문서부터 가져오기
+          .limit(1)
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -143,6 +146,7 @@ class _UserPageState extends State<UserPage> {
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -183,7 +187,7 @@ class _UserPageState extends State<UserPage> {
                     top: ap.y / 100 * screenWidth - apIconsize / 2,
                     child: Opacity(
                       opacity: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
-                          ? getOpacityFromRssi(bleLocation!.nearestApRssi)
+                          ? getOpacityFromRssi(bleLocation!.rssi)
                           : 0.5, // 일치하지 않는 AP는 회색, 투명도 낮음
                       child: Icon(
                         Icons.router,
@@ -195,14 +199,14 @@ class _UserPageState extends State<UserPage> {
                     ),
                   ),
                 // 📡 BLE 아이콘 표시
-                if (bleLocation != null)
+                if (bleLocation != null && bleLocation!.x != null && bleLocation!.y != null)
                   Positioned(
-                    left: bleLocation!.x / 100 * screenWidth - bleIconsize / 2,
-                    top: bleLocation!.y / 100 * screenWidth - bleIconsize / 2,
+                    left: bleLocation!.x! / 100 * screenWidth - bleIconsize / 2,
+                    top: bleLocation!.y! / 100 * screenWidth - bleIconsize / 2,
                     child: Icon(
                       Icons.person_2_rounded,
                       color: bleColor,
-                      size: bleIconsize
+                      size: bleIconsize,
                     ),
                   ),
               ],
