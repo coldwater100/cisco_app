@@ -17,9 +17,13 @@ class UserPage extends StatefulWidget {
 class _UserPageState extends State<UserPage> {
   String? otpValue;
   String? macAddress;
-  List<ApLocation> apLocations = [];
-  List<BleLocation> bleLocations = [];
-  Timer? _timer; // ✅ 타이머 변수
+  List<ApLocation> apLocations = [];  // ap 들의 data
+  BleLocation? bleLocation ; // 등록된 ble 의 data
+  Timer? _timer; //
+  final timerInterval = 5; // ble data 갱신 주기
+  final Color apColor = Colors.redAccent;
+  final Color apColorRemote = Colors.grey;
+  final Color bleColor = Colors.blueAccent;
 
   @override
   void initState() {
@@ -33,8 +37,8 @@ class _UserPageState extends State<UserPage> {
     _loadMacFromOtp();
     _loadApLocations();
 
-    // ✅ 5초마다 위치 다시 불러오기
-    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    // ✅ 5초마다 위치 다시 불러온다
+    _timer = Timer.periodic(Duration(seconds: timerInterval), (timer) {
       _loadBleLocations();
     });
   }
@@ -45,6 +49,14 @@ class _UserPageState extends State<UserPage> {
     super.dispose();
   }
 
+  // rssi값에 따라 icon의 opacity를 결정
+  double getOpacityFromRssi(int rssi) {
+    final clamped = rssi.clamp(-100, -50);
+    return (clamped + 100) / 100 * 0.5 + 0.5;
+  }
+
+
+  // Firestore 에서 otp를 이용 기계의 mac 값을 구함
   Future<void> _loadMacFromOtp() async {
     try {
       final otpQuery = await FirebaseFirestore.instance
@@ -71,6 +83,7 @@ class _UserPageState extends State<UserPage> {
     }
   }
 
+  // Firestore 에서 AP의 data를 읽어 와서 apLocation 에 저장
   Future<void> _loadApLocations() async {
     try {
       final querySnapshot =
@@ -95,21 +108,35 @@ class _UserPageState extends State<UserPage> {
   }
 
   Future<void> _loadBleLocations() async {
-    try {
-      final querySnapshot =
-      await FirebaseFirestore.instance.collection('bleLocations').get();
-
-      final loadedLocations = querySnapshot.docs.map((doc) {
-        return BleLocation.fromMap(doc.data());
-      }).toList();
-
+    if (macAddress == null) {
       if (kDebugMode) {
-        print(">>>> Ble 데이터 불러오기 완료: $loadedLocations");
+        print(">>>> macAddress가 아직 준비되지 않았습니다.");
       }
+      return;
+    }
 
-      setState(() {
-        bleLocations = loadedLocations;
-      });
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('bleLocations')
+          .where('mac', isEqualTo: macAddress)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final data = querySnapshot.docs.first.data();
+        final location = BleLocation.fromMap(data);
+
+        if (kDebugMode) {
+          print(">>>> BLE 위치 찾음: $location");
+        }
+
+        setState(() {
+          bleLocation = location;
+        });
+      } else {
+        if (kDebugMode) {
+          print(">>>> BLE 위치 정보가 없습니다.");
+        }
+      }
     } catch (e) {
       if (kDebugMode) {
         print(">>>> Firestore 조회 오류 (bleLocations): $e");
@@ -120,8 +147,8 @@ class _UserPageState extends State<UserPage> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    const double ap_iconSize = 30.0;
-    const double ble_iconSize = 30.0;
+    const double apIconsize = 30.0;
+    const double bleIconsize = 30.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -152,23 +179,30 @@ class _UserPageState extends State<UserPage> {
                 // 🛰️ AP 아이콘 표시
                 for (var ap in apLocations)
                   Positioned(
-                    left: ap.x / 100 * screenWidth - ap_iconSize / 2,
-                    top: ap.y / 100 * screenWidth - ap_iconSize / 2,
-                    child: const Icon(
-                      Icons.router,
-                      color: Colors.blueAccent,
-                      size: ap_iconSize,
+                    left: ap.x / 100 * screenWidth - apIconsize / 2,
+                    top: ap.y / 100 * screenWidth - apIconsize / 2,
+                    child: Opacity(
+                      opacity: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
+                          ? getOpacityFromRssi(bleLocation!.nearestApRssi)
+                          : 0.5, // 일치하지 않는 AP는 회색, 투명도 낮음
+                      child: Icon(
+                        Icons.router,
+                        color: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
+                            ? apColor
+                            : apColorRemote,
+                        size: apIconsize,
+                      ),
                     ),
                   ),
                 // 📡 BLE 아이콘 표시
-                for (var ble in bleLocations)
+                if (bleLocation != null)
                   Positioned(
-                    left: ble.x / 100 * screenWidth - ble_iconSize / 2,
-                    top: ble.y / 100 * screenWidth - ble_iconSize / 2,
-                    child: const Icon(
+                    left: bleLocation!.x / 100 * screenWidth - bleIconsize / 2,
+                    top: bleLocation!.y / 100 * screenWidth - bleIconsize / 2,
+                    child: Icon(
                       Icons.person_2_rounded,
-                      color: Colors.redAccent,
-                      size: ble_iconSize,
+                      color: bleColor,
+                      size: bleIconsize
                     ),
                   ),
               ],
