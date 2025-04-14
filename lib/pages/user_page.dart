@@ -577,9 +577,11 @@ class _UserPageState extends State<UserPage> {
           final data = doc.data();
           final alarmMessage = AlarmMessage.fromMap(data);
 
-          final formattedTime = DateFormat.Hms().format(alarmMessage.timestamp.toLocal());
-          return '$formattedTime : ${alarmMessage.alarm}'; // 시간만 출력
+          print("<<<<alarmMessage:" + alarmMessage.formattedTime);
+
+          return '${alarmMessage.formattedTime} : ${alarmMessage.alarm}'; // 포맷된 시간 바로 사용
         }).toList();
+
 
         if (loadedAlarms.length > previousAlarmCount) {
           final newAlarms = loadedAlarms.sublist(previousAlarmCount);
