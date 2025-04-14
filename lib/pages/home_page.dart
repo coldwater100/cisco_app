@@ -24,7 +24,7 @@ class HomePage extends StatelessWidget {
             right: 0,
             child: Center(
               child: Text(
-                'BLUE FENCE',
+                '',
                 style: GoogleFonts.playfairDisplay( // 원하는 글꼴로 바꿔도 돼!
                   fontSize: 48,
                   color: Colors.white,
@@ -42,7 +42,7 @@ class HomePage extends StatelessWidget {
           ),
           // 가운데 아래쪽 카메라 버튼
           Align(
-            alignment: const Alignment(0, 0.4),
+            alignment: const Alignment(0, 0.6),
             child: Ink(
               decoration: const BoxDecoration(
                 color: Colors.transparent,
@@ -57,7 +57,7 @@ class HomePage extends StatelessWidget {
                 },
                 icon: const Icon(Icons.camera_alt),
                 iconSize: 96, // 더 크게!
-                color: Colors.white,
+                color: Colors.black,
                 splashRadius: 48,
               ),
             ),

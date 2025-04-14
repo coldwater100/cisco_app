@@ -58,7 +58,7 @@ class _UserPageState extends State<UserPage> {
     try {
       final otpQuery = await FirebaseFirestore.instance
           .collection('macOtpPairs')
-          .where('otp', isEqualTo: '603675') // 나중에 otpValue로
+          .where('otp', isEqualTo: otpValue) // 나중에 otpValue로
           .get();
 
       if (otpQuery.docs.isNotEmpty) {
@@ -237,7 +237,7 @@ class _UserPageState extends State<UserPage> {
               color: Colors.yellow.shade200,
               child: const Center(
                 child: Text(
-                  '📘 범례 영역 (추후 사용)',
+                  "hi",
                   style: TextStyle(fontSize: 18),
                 ),
               ),
