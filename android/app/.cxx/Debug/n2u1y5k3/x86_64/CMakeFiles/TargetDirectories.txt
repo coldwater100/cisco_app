@@ -1,0 +1,2 @@
+D:/chance/cisco_app/android/app/.cxx/Debug/n2u1y5k3/x86_64/CMakeFiles/edit_cache.dir
+D:/chance/cisco_app/android/app/.cxx/Debug/n2u1y5k3/x86_64/CMakeFiles/rebuild_cache.dir

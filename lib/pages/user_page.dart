@@ -1,7 +1,381 @@
+// import 'dart:async';
+// import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:flutter/foundation.dart';
+// import 'package:flutter/material.dart';
+// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// import 'package:intl/intl.dart';
+// import '../data/alarm_message.dart';
+// import '../data/ap_location.dart';
+// import '../data/ble_location.dart';
+//
+// class UserPage extends StatefulWidget {
+//   final String scannedText;
+//
+//   const UserPage({super.key, required this.scannedText});
+//
+//   @override
+//   State<UserPage> createState() => _UserPageState();
+// }
+//
+// class _UserPageState extends State<UserPage> {
+//   String? otpValue;
+//   String? macAddress;
+//   List<ApLocation> apLocations = [];
+//   BleLocation? bleLocation;
+//   Timer? _timer;
+//   final timerInterval = 2;
+//   final Color apColor = Colors.redAccent;
+//   final Color apColorRemote = Colors.grey;
+//   final Color bleColor = Colors.blueAccent;
+//
+//   List<String> alarmList = [];
+//   int previousAlarmCount = 0;
+//
+//   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+//   FlutterLocalNotificationsPlugin();
+//
+//   void _initNotification() {
+//     const AndroidInitializationSettings initializationSettingsAndroid =
+//     AndroidInitializationSettings('@mipmap/ic_launcher');
+//
+//     const InitializationSettings initializationSettings =
+//     InitializationSettings(android: initializationSettingsAndroid);
+//
+//     flutterLocalNotificationsPlugin.initialize(initializationSettings);
+//   }
+//
+//   @override
+//   void initState() {
+//     super.initState();
+//
+//     _initNotification();
+//
+//     otpValue = widget.scannedText;
+//
+//     if (kDebugMode) {
+//       print(">>>> 스캔된 OTP: $otpValue");
+//     }
+//
+//     _loadMacFromOtp();
+//     _loadApLocations();
+//
+//     _timer = Timer.periodic(Duration(seconds: timerInterval), (timer) {
+//       _loadBleLocations();
+//       _loadAlarmMessages();
+//     });
+//   }
+//
+//   @override
+//   void dispose() {
+//     _timer?.cancel();
+//     super.dispose();
+//   }
+//
+//   double getOpacityFromRssi(int? rssi) {
+//     if (rssi == null) return 0.5;
+//     final clamped = rssi.clamp(-100, -50);
+//     return (clamped + 100) / 100 * 0.5 + 0.5;
+//   }
+//
+//   Future<void> _loadMacFromOtp() async {
+//     try {
+//       final otpQuery = await FirebaseFirestore.instance
+//           .collection('macOtpPairs')
+//           .where('otp', isEqualTo: otpValue) // 나중에 otpValue로
+//           .get();
+//
+//       if (otpQuery.docs.isNotEmpty) {
+//         final data = otpQuery.docs.first.data();
+//         macAddress = data['mac'];
+//
+//         if (kDebugMode) {
+//           print(">>>> macAddress: $macAddress");
+//         }
+//       } else {
+//         if (kDebugMode) {
+//           print(">>>> 해당 OTP에 대한 macAddress를 찾을 수 없습니다");
+//         }
+//       }
+//     } catch (e) {
+//       if (kDebugMode) {
+//         print(">>>> Firestore 조회 오류 (macOtpPairs): $e");
+//       }
+//     }
+//   }
+//
+//   Future<void> _loadApLocations() async {
+//     try {
+//       final querySnapshot =
+//       await FirebaseFirestore.instance.collection('apLocations').get();
+//
+//       final loadedLocations = querySnapshot.docs.map((doc) {
+//         return ApLocation.fromMap(doc.data());
+//       }).toList();
+//
+//       if (kDebugMode) {
+//         print(">>>> AP 위치 불러오기 완료: $loadedLocations");
+//       }
+//
+//       setState(() {
+//         apLocations = loadedLocations;
+//       });
+//     } catch (e) {
+//       if (kDebugMode) {
+//         print(">>>> Firestore 조회 오류 (apLocations): $e");
+//       }
+//     }
+//   }
+//
+//   Future<void> _loadBleLocations() async {
+//     if (macAddress == null) {
+//       if (kDebugMode) {
+//         print(">>>> macAddress가 아직 준비되지 않았습니다.");
+//       }
+//       return;
+//     }
+//
+//     try {
+//       final querySnapshot = await FirebaseFirestore.instance
+//           .collection('scanning_data')
+//           .where('clientMac', isEqualTo: macAddress)
+//           .orderBy('timestamp', descending: true)
+//           .limit(1)
+//           .get();
+//
+//       if (querySnapshot.docs.isNotEmpty) {
+//         final data = querySnapshot.docs.first.data();
+//         final location = BleLocation.fromMap(data);
+//
+//         if (kDebugMode) {
+//           print(">>>> BLE 위치 찾음: $location");
+//         }
+//
+//         setState(() {
+//           bleLocation = location;
+//         });
+//       } else {
+//         if (kDebugMode) {
+//           print(">>>> BLE 위치 정보가 없습니다.");
+//         }
+//       }
+//     } catch (e) {
+//       if (kDebugMode) {
+//         print(">>>> Firestore 조회 오류 (bleLocations): $e");
+//       }
+//     }
+//   }
+//
+//   // AlarmMessages를 로드하여 alarmList를 업데이트하는 함수
+//   Future<void> _loadAlarmMessages() async {
+//     if (macAddress == null) {
+//       if (kDebugMode) {
+//         print(">>>> macAddress가 아직 준비되지 않았습니다.");
+//       }
+//       return;
+//     }
+//
+//     try {
+//       // Firestore에서 macAddress에 해당하는 알람 메시지 가져오기
+//       final querySnapshot = await FirebaseFirestore.instance
+//           .collection('macAlart') // 'alarmMessages' 컬렉션
+//           .where('mac', isEqualTo: macAddress) // macAddress와 일치하는 것만
+//           .orderBy('timestamp', descending: true) // timestamp 기준으로 내림차순 정렬
+//           .get();
+//
+//       if (querySnapshot.docs.isNotEmpty) {
+//         final loadedAlarms = querySnapshot.docs.map((doc) {
+//           final data = doc.data();
+//           final alarmMessage = AlarmMessage.fromMap(data);
+//
+//           final formattedTime = DateFormat.Hms().format(alarmMessage.timestamp.toLocal());
+//           return '$formattedTime : ${alarmMessage.alarm}'; // 시간만 출력
+//         }).toList();
+//
+//         if (loadedAlarms.length > previousAlarmCount) {
+//           // ✨ 갯수가 늘었을 때 (새 알람이 들어왔을 때)
+//           final newAlarms = loadedAlarms.sublist(previousAlarmCount);
+//
+//           for (var msg in newAlarms) {
+//             _showNotification(msg); // ✅ 여기서 Notification을 띄움
+//           }
+//         }
+//
+//         setState(() {
+//           alarmList = loadedAlarms;
+//           previousAlarmCount = loadedAlarms.length; // 갯수 저장
+//         });
+//
+//         // 상태 업데이트: 새로운 alarmList로 설정
+//         // setState(() {
+//         //   alarmList.clear(); // 기존 알람 리스트 비우기
+//         //   alarmList.addAll(loadedAlarms); // 새로운 알람 리스트 추가
+//         // });
+//
+//         if (kDebugMode) {
+//           print(">>>> 알람 메시지 로드 완료: $loadedAlarms");
+//         }
+//       } else {
+//         if (kDebugMode) {
+//           print(">>>> 해당 macAddress에 대한 알람 메시지가 없습니다.");
+//         }
+//       }
+//     } catch (e) {
+//       if (kDebugMode) {
+//         print(">>>> Firestore 조회 오류 (alarmMessages): $e");
+//       }
+//     }
+//   }
+//
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     final screenWidth = MediaQuery.of(context).size.width;
+//     const double apIconsize = 30.0;
+//     const double bleIconsize = 30.0;
+//
+//     final currentAp = bleLocation != null
+//         ? apLocations.firstWhere(
+//           (ap) => ap.mac.toLowerCase() == bleLocation!.nearestApMac?.toLowerCase(),
+//       orElse: () => ApLocation(
+//         mac: '',
+//         x: 0,
+//         y: 0,
+//         areaId: '',
+//         areaName: '',
+//         division: '',
+//       ),
+//     )
+//         : null;
+//
+//     final currentAreaId = (currentAp != null && currentAp.mac.isNotEmpty) ? currentAp.areaId : '';
+//     final currentAreaName = (currentAp != null && currentAp.mac.isNotEmpty) ? currentAp.areaName : '';
+//     final currentDivision = (currentAp != null && currentAp.mac.isNotEmpty) ? currentAp.division : '';
+//
+//     final imagePath = currentAreaId.isNotEmpty
+//         ? 'assets/images/$currentAreaId.png'
+//         : 'assets/images/default.png';
+//
+//     final filteredAps = currentAreaId.isNotEmpty
+//         ? apLocations.where((ap) => ap.areaId == currentAreaId).toList()
+//         : [];
+//
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text(currentAreaId.isNotEmpty
+//             ? '$currentAreaName ($currentDivision)'
+//             : '👤 사용자 위치 확인'),
+//       ),
+//       body: Column(
+//         children: [
+//           SizedBox(
+//             width: screenWidth,
+//             height: screenWidth,
+//             child: Stack(
+//               children: [
+//                 Image.asset(
+//                   imagePath,
+//                   fit: BoxFit.cover,
+//                   width: screenWidth,
+//                   height: screenWidth,
+//                   errorBuilder: (context, error, stackTrace) {
+//                     return const Center(
+//                       child: Text(
+//                         '🏞️ 이미지 로드 실패',
+//                         style: TextStyle(color: Colors.red),
+//                       ),
+//                     );
+//                   },
+//                 ),
+//                 for (var ap in filteredAps)
+//                   Positioned(
+//                     left: ap.x / 100 * screenWidth - apIconsize / 2,
+//                     top: ap.y / 100 * screenWidth - apIconsize / 2,
+//                     child: Opacity(
+//                       opacity: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
+//                           ? getOpacityFromRssi(bleLocation!.rssi)
+//                           : 0.5,
+//                       child: Icon(
+//                         Icons.router,
+//                         color: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
+//                             ? apColor
+//                             : apColorRemote,
+//                         size: apIconsize,
+//                       ),
+//                     ),
+//                   ),
+//                 if (bleLocation != null && bleLocation!.x != null && bleLocation!.y != null)
+//                   Positioned(
+//                     left: bleLocation!.x! / 100 * screenWidth - bleIconsize / 2,
+//                     top: bleLocation!.y! / 100 * screenWidth - bleIconsize / 2,
+//                     child: Icon(
+//                       Icons.person_2_rounded,
+//                       color: bleColor,
+//                       size: bleIconsize,
+//                     ),
+//                   ),
+//               ],
+//             ),
+//           ),
+//           Expanded(
+//             child: Container(
+//               width: double.infinity,
+//               color: Colors.yellow.shade200,
+//               padding: const EdgeInsets.all(16),
+//               child: Column(
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 children: [
+//                   const Text(
+//                     "📢 알람",
+//                     style: TextStyle(
+//                       fontSize: 20,
+//                       fontWeight: FontWeight.bold,
+//                     ),
+//                   ),
+//                   const SizedBox(height: 8),
+//                   Expanded(
+//                     child: ListView.builder(
+//                       itemCount: alarmList.length,
+//                       itemBuilder: (context, index) {
+//                         return Container(
+//                           margin: const EdgeInsets.symmetric(vertical: 4),
+//                           padding: const EdgeInsets.all(12),
+//                           decoration: BoxDecoration(
+//                             color: Colors.white,
+//                             borderRadius: BorderRadius.circular(8),
+//                             boxShadow: const [
+//                               BoxShadow(
+//                                 color: Colors.black12,
+//                                 blurRadius: 2,
+//                                 offset: Offset(0, 1),
+//                               )
+//                             ],
+//                           ),
+//                           child: Text(
+//                             alarmList[index],
+//                             style: const TextStyle(fontSize: 16),
+//                           ),
+//                         );
+//                       },
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
+
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:intl/intl.dart';
+import '../data/alarm_message.dart';
 import '../data/ap_location.dart';
 import '../data/ble_location.dart';
 
@@ -25,9 +399,16 @@ class _UserPageState extends State<UserPage> {
   final Color apColorRemote = Colors.grey;
   final Color bleColor = Colors.blueAccent;
 
+  List<String> alarmList = [];
+  int previousAlarmCount = 0;
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+
   @override
   void initState() {
     super.initState();
+    _initNotification();
     otpValue = widget.scannedText;
 
     if (kDebugMode) {
@@ -39,6 +420,7 @@ class _UserPageState extends State<UserPage> {
 
     _timer = Timer.periodic(Duration(seconds: timerInterval), (timer) {
       _loadBleLocations();
+      _loadAlarmMessages();
     });
   }
 
@@ -52,6 +434,39 @@ class _UserPageState extends State<UserPage> {
     if (rssi == null) return 0.5;
     final clamped = rssi.clamp(-100, -50);
     return (clamped + 100) / 100 * 0.5 + 0.5;
+  }
+
+  void _initNotification() {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initializationSettings =
+    InitializationSettings(android: initializationSettingsAndroid);
+
+    flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  Future<void> _showNotification(String message) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'alarm_channel_id', // 알림 채널 ID
+      'Alarm Channel', // 알림 채널 이름
+      channelDescription: 'Channel for alarm notifications', // 채널 설명
+      importance: Importance.high, // 중요도 설정
+      priority: Priority.high, // 우선순위 설정
+      ticker: 'ticker',
+    );
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      0, // 알림 ID (0은 첫 번째 알림)
+      '새 알람', // 알림 제목
+      message, // 알림 메시지 (여기서 알람 내용을 사용)
+      platformDetails, // 플랫폼 별 알림 설정
+      payload: 'alarm_payload', // 알림 클릭 시 추가 정보 전달 (선택 사항)
+    );
   }
 
   Future<void> _loadMacFromOtp() async {
@@ -138,6 +553,58 @@ class _UserPageState extends State<UserPage> {
     } catch (e) {
       if (kDebugMode) {
         print(">>>> Firestore 조회 오류 (bleLocations): $e");
+      }
+    }
+  }
+
+  Future<void> _loadAlarmMessages() async {
+    if (macAddress == null) {
+      if (kDebugMode) {
+        print(">>>> macAddress가 아직 준비되지 않았습니다.");
+      }
+      return;
+    }
+
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('macAlart') // 'alarmMessages' 컬렉션
+          .where('mac', isEqualTo: macAddress) // macAddress와 일치하는 것만
+          .orderBy('timestamp', descending: true) // timestamp 기준으로 내림차순 정렬
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final loadedAlarms = querySnapshot.docs.map((doc) {
+          final data = doc.data();
+          final alarmMessage = AlarmMessage.fromMap(data);
+
+          final formattedTime = DateFormat.Hms().format(alarmMessage.timestamp.toLocal());
+          return '$formattedTime : ${alarmMessage.alarm}'; // 시간만 출력
+        }).toList();
+
+        if (loadedAlarms.length > previousAlarmCount) {
+          final newAlarms = loadedAlarms.sublist(previousAlarmCount);
+
+          for (var msg in newAlarms) {
+            _showNotification(msg); // ✅ 새 알람에 대한 알림 표시
+          }
+        }
+
+        setState(() {
+          alarmList = loadedAlarms;
+          previousAlarmCount = loadedAlarms.length; // 갯수 저장
+        });
+
+        if (kDebugMode) {
+          print(">>>> 알람 메시지 로드 완료: $loadedAlarms");
+        }
+      } else {
+        if (kDebugMode) {
+          print(">>>> 해당 macAddress에 대한 알람 메시지가 없습니다.");
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(">>>> Firestore 조회 오류 (alarmMessages): $e");
       }
     }
   }
@@ -235,11 +702,45 @@ class _UserPageState extends State<UserPage> {
             child: Container(
               width: double.infinity,
               color: Colors.yellow.shade200,
-              child: const Center(
-                child: Text(
-                  "hi",
-                  style: TextStyle(fontSize: 18),
-                ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "📢 알람",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: alarmList.length,
+                      itemBuilder: (context, index) {
+                        return Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              )
+                            ],
+                          ),
+                          child: Text(
+                            alarmList[index],
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -248,244 +749,6 @@ class _UserPageState extends State<UserPage> {
     );
   }
 }
-
-
-
-
-
-// import 'dart:async'; // ✅ Timer 사용 위해 필요
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:flutter/foundation.dart';
-// import 'package:flutter/material.dart';
-// import '../data/ap_location.dart';
-// import '../data/ble_location.dart';
-//
-// class UserPage extends StatefulWidget {
-//   final String scannedText;
-//
-//   const UserPage({super.key, required this.scannedText});
-//
-//   @override
-//   State<UserPage> createState() => _UserPageState();
-// }
-//
-// class _UserPageState extends State<UserPage> {
-//   String? otpValue;
-//   String? macAddress;
-//   List<ApLocation> apLocations = [];  // ap 들의 data
-//   BleLocation? bleLocation ; // 등록된 ble 의 data
-//   Timer? _timer; //
-//   final timerInterval = 2; // ble data 갱신 주기
-//   final Color apColor = Colors.redAccent;
-//   final Color apColorRemote = Colors.grey;
-//   final Color bleColor = Colors.blueAccent;
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     otpValue = widget.scannedText;
-//
-//     if (kDebugMode) {
-//       print(">>>> 스캔된 OTP: $otpValue");
-//     }
-//
-//     _loadMacFromOtp();
-//     _loadApLocations();
-//
-//     // ✅ 5초마다 위치 다시 불러온다
-//     _timer = Timer.periodic(Duration(seconds: timerInterval), (timer) {
-//       _loadBleLocations();
-//     });
-//   }
-//
-//   @override
-//   void dispose() {
-//     _timer?.cancel(); // ✅ 타이머 종료
-//     super.dispose();
-//   }
-//
-//   // rssi값에 따라 icon의 opacity를 결정
-//   double getOpacityFromRssi(int? rssi) {
-//     if( rssi == null) return 0.5;
-//     final clamped = rssi.clamp(-100, -50);
-//     return (clamped + 100) / 100 * 0.5 + 0.5;
-//   }
-//
-//
-//   // Firestore 에서 otp를 이용 기계의 mac 값을 구함
-//   Future<void> _loadMacFromOtp() async {
-//     try {
-//       final otpQuery = await FirebaseFirestore.instance
-//           .collection('macOtpPairs')
-//           .where('otp', isEqualTo: '603675') // 나중에 otpValue로 교체
-//           .get();
-//
-//       if (otpQuery.docs.isNotEmpty) {
-//         final data = otpQuery.docs.first.data();
-//         macAddress = data['mac'];
-//
-//         if (kDebugMode) {
-//           print(">>>> macAddress: $macAddress");
-//         }
-//       } else {
-//         if (kDebugMode) {
-//           print(">>>> 해당 OTP에 대한 macAddress를 찾을 수 없습니다");
-//         }
-//       }
-//     } catch (e) {
-//       if (kDebugMode) {
-//         print(">>>> Firestore 조회 오류 (macOtpPairs): $e");
-//       }
-//     }
-//   }
-//
-//   // Firestore 에서 AP의 data를 읽어 와서 apLocation 에 저장
-//   Future<void> _loadApLocations() async {
-//     try {
-//       final querySnapshot =
-//       await FirebaseFirestore.instance.collection('apLocations').get();
-//
-//       final loadedLocations = querySnapshot.docs.map((doc) {
-//         return ApLocation.fromMap(doc.data());
-//       }).toList();
-//
-//       if (kDebugMode) {
-//         print(">>>> AP 위치 불러오기 완료: $loadedLocations");
-//       }
-//
-//       setState(() {
-//         apLocations = loadedLocations;
-//       });
-//     } catch (e) {
-//       if (kDebugMode) {
-//         print(">>>> Firestore 조회 오류 (apLocations): $e");
-//       }
-//     }
-//   }
-//
-//   Future<void> _loadBleLocations() async {
-//     if (macAddress == null) {
-//       if (kDebugMode) {
-//         print(">>>> macAddress가 아직 준비되지 않았습니다.");
-//       }
-//       return;
-//     }
-//
-//     try {
-//       final querySnapshot = await FirebaseFirestore.instance
-//           .collection('scanning_data')
-//           .where('clientMac', isEqualTo: macAddress)
-//           .orderBy('timestamp', descending: true) // 최신 문서부터 가져오기
-//           .limit(1)
-//           .get();
-//
-//       if (querySnapshot.docs.isNotEmpty) {
-//         final data = querySnapshot.docs.first.data();
-//         final location = BleLocation.fromMap(data);
-//
-//         if (kDebugMode) {
-//           print(">>>> BLE 위치 찾음: $location");
-//         }
-//
-//         setState(() {
-//           bleLocation = location;
-//         });
-//       } else {
-//         if (kDebugMode) {
-//           print(">>>> BLE 위치 정보가 없습니다.");
-//         }
-//       }
-//     } catch (e) {
-//       if (kDebugMode) {
-//         print(">>>> Firestore 조회 오류 (bleLocations): $e");
-//       }
-//     }
-//   }
-//
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final screenWidth = MediaQuery.of(context).size.width;
-//     const double apIconsize = 30.0;
-//     const double bleIconsize = 30.0;
-//
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('👤 사용자 위치 확인 '),
-//       ),
-//       body: Column(
-//         children: [
-//           // 🖼️ 배경 이미지 + AP 위치
-//           SizedBox(
-//             width: screenWidth,
-//             height: screenWidth,
-//             child: Stack(
-//               children: [
-//                 Image.asset(
-//                   'assets/images/1f.png',
-//                   fit: BoxFit.cover,
-//                   width: screenWidth,
-//                   height: screenWidth,
-//                   errorBuilder: (context, error, stackTrace) {
-//                     return const Center(
-//                       child: Text(
-//                         '🏞️ 이미지 로드 실패',
-//                         style: TextStyle(color: Colors.red),
-//                       ),
-//                     );
-//                   },
-//                 ),
-//                 // 🛰️ AP 아이콘 표시
-//                 for (var ap in apLocations)
-//                   Positioned(
-//                     left: ap.x / 100 * screenWidth - apIconsize / 2,
-//                     top: ap.y / 100 * screenWidth - apIconsize / 2,
-//                     child: Opacity(
-//                       opacity: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
-//                           ? getOpacityFromRssi(bleLocation!.rssi)
-//                           : 0.5, // 일치하지 않는 AP는 회색, 투명도 낮음
-//                       child: Icon(
-//                         Icons.router,
-//                         color: (bleLocation != null && bleLocation!.nearestApMac == ap.mac)
-//                             ? apColor
-//                             : apColorRemote,
-//                         size: apIconsize,
-//                       ),
-//                     ),
-//                   ),
-//                 // 📡 BLE 아이콘 표시
-//                 if (bleLocation != null && bleLocation!.x != null && bleLocation!.y != null)
-//                   Positioned(
-//                     left: bleLocation!.x! / 100 * screenWidth - bleIconsize / 2,
-//                     top: bleLocation!.y! / 100 * screenWidth - bleIconsize / 2,
-//                     child: Icon(
-//                       Icons.person_2_rounded,
-//                       color: bleColor,
-//                       size: bleIconsize,
-//                     ),
-//                   ),
-//               ],
-//             ),
-//           ),
-//
-//           // 🔶 아래 legend 공간
-//           Expanded(
-//             child: Container(
-//               width: double.infinity,
-//               color: Colors.yellow.shade200,
-//               child: const Center(
-//                 child: Text(
-//                   '📘 범례 영역 (추후 사용)',
-//                   style: TextStyle(fontSize: 18),
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
 
 
 
